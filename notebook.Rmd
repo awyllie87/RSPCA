@@ -1,0 +1,35 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r libraries}
+library(tidyverse)
+```
+
+
+```{r data}
+townsville_complaints <- read_csv("data/animal_complaints.csv")
+brisbane_complaints <- read_csv("data/brisbane_complaints.csv")
+rspca_outcomes <- read_csv("data/animal_outcomes.csv")
+```
+
+```{r cleaning}
+rspca_clean <- rspca_outcomes %>% 
+  janitor::clean_names() %>% 
+  group_by(year, animal_type, outcome) %>% 
+  mutate(total = sum(c(act,nsw,nt,qld,sa,tas,vic,wa), na.rm = TRUE)) %>% 
+  ungroup()
+
+brisbane_complaints %>% 
+  select(-c(nature, responsible_office, city, date_range)) %>% 
+  mutate(category = replace_na(category, "Not Provided")) %>% 
+  group_by(animal_type, category) %>% 
+  summarise(count = n())
+
+townsville_complaints %>% 
+  janitor::clean_names() %>%
+  group_by(date_received) %>% 
+  separate(date_received, c("month", "year"), sep = " ", remove = FALSE)
+```
+
