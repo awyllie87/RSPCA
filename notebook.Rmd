@@ -33,3 +33,34 @@ townsville_complaints %>%
   separate(date_received, c("month", "year"), sep = " ", remove = FALSE)
 ```
 
+```{r}
+unique(rspca_clean$animal_type)
+
+rspca_clean %>%
+  filter(animal_type == "Dogs") %>%
+  ggplot(aes(x = year, y = total, colour = outcome)) +
+  geom_line() +
+  theme_classic()
+```
+
+Everything except Wildlife -
+
+Currently in Care is incomplete - starts in 2009
+In stock only exists for 2002 - 2008
+Transferred is incomplete - starts in 2002
+
+Wildlife
+Different stats --
+No Reclaimed, Rehome
+Has Released
+Rest the same
+
+Can do euthanization comparisons across them all. 
+
+
+```{r}
+rspca_clean %>%
+  filter(animal_type == "Other Animals" & outcome == "Currently In Care")
+
+```
+
