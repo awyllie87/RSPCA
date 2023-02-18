@@ -82,7 +82,9 @@ brisbane_clean <- brisbane_complaints %>%
 townsville_clean <- townsville_complaints %>% 
   janitor::clean_names() %>%
   group_by(date_received) %>% 
-  separate(date_received, c("month", "year"), sep = " ", remove = FALSE)
+  separate(date_received, c("month", "year"), sep = " ", remove = FALSE) %>% 
+  mutate(month = factor(month, levels = c("January", "February","March","April","May","June",
+                                          "July","August","September","October","November","December")))
 ```
 
 ```{r ggplot theme}
@@ -324,6 +326,12 @@ brisbane_clean %>%
   arrange(-count)
 
 brisbane_clean %>% 
+  filter(animal_type == "Attack") %>% 
+  group_by(year) %>% 
+  summarise(count = n()) %>% 
+  arrange(-count)
+
+brisbane_clean %>% 
   filter((year == 2016 & quarter == "Q4") | year > 2016) %>%
   group_by(date_range, suburb) %>% 
   summarise(count = n()) %>% 
@@ -388,5 +396,18 @@ brisbane_clean %>%
   ggplot(aes(x = quarter, y = count, colour = category, group = category)) +
   geom_line() +
   facet_wrap(~ year, scales = "free")
+```
+
+# Townsville
+
+Only dogs and cats!
+Last 3 months of 2013 through first 6 2020
+
+```{r}
+townsville_clean %>% 
+  filter(year != 2013 & year != 2020) %>% 
+  group_by(year, animal_type, complaint_type) %>% 
+  summarise(count = n()) %>% 
+  arrange(year, -count)
 ```
 
