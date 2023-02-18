@@ -56,13 +56,22 @@ rspca_states <- rspca_clean %>%
   mutate(success = round((sum(reclaimed, rehomed, released, na.rm = TRUE) / total), 2),
          lrr = round((sum(reclaimed, rehomed, released, transferred, na.rm = TRUE) / lrr_total), 2))
 
-brisbane_complaints %>% 
-  select(-c(nature, responsible_office, city, date_range)) %>% 
-  mutate(category = replace_na(category, "Not Provided")) %>% 
-  group_by(animal_type, category) %>% 
-  summarise(count = n())
+brisbane_clean <- brisbane_complaints %>% 
+  select(-c(nature, responsible_office, city)) %>% 
+  mutate(category = replace_na(category, "Not Provided"),
+         data = date_range,
+         date_range = str_remove_all(date_range, "(.csv)|(.*(?=(jan)|(apr)|(oct)))"),
+         date_range = str_replace_all(date_range, "(^january)|(^1st)|(^jan)", "Q1"),
+         date_range = str_replace_all(date_range, "(^april)|(^apr)", "Q2"),
+         date_range = str_replace_all(date_range, "(^july)|(^jul)", "Q3"),
+         date_range = str_replace_all(date_range, "(^october)|(^oct)", "Q4"),
+         date_range = str_replace(date_range, "-.*-"," "),
+         date_range = str_replace(date_range, "Q1 17", "Q1 2016"),
+         suburb = snakecase::to_title_case(suburb)
+  ) %>% 
+  separate(date_range, c("quarter", "year"))
 
-townsville_complaints %>% 
+townsville_clean <- townsville_complaints %>% 
   janitor::clean_names() %>%
   group_by(date_received) %>% 
   separate(date_received, c("month", "year"), sep = " ", remove = FALSE)
@@ -76,6 +85,8 @@ mytheme <- theme_classic() +
         legend.key = element_rect())
 ```
 
+
+# RSPCA
 
 Everything except Wildlife -
 
@@ -280,7 +291,17 @@ rspca_summary %>%
                       limits = c("Cats", "Dogs"))
 ```
 
-```{r}
+# Brisbane
 
+Cat Trapping is ALWAYS categorised as Not Provided
+Category for Other Animal sometimes lists what the animal is
+MISSING Q3 2016. ENDS Q2 2020
+
+```{r}
+brisbane_clean %>% 
+  group_by(year, quarter) %>% 
+  summarise(data) %>% 
+  arrange(year, quarter) %>% 
+  distinct()
 ```
 
