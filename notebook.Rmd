@@ -70,11 +70,11 @@ brisbane_clean <- brisbane_complaints %>%
          animal_type = if_else(animal_type == "Cat Trapping", "Cat", animal_type),
          suburb = snakecase::to_title_case(suburb),
          date_range = factor(date_range, levels = c("Q1 2016", "Q2 2016", "Q3 2016", "Q4 2016",
-                                                       "Q1 2017", "Q2 2017", "Q3 2017", "Q4 2017",
-                                                       "Q1 2018", "Q2 2018", "Q3 2018", "Q4 2018",
-                                                       "Q1 2019", "Q2 2019", "Q3 2019", "Q4 2019",
-                                                       "Q1 2020", "Q2 2020"
-                                                       ))
+                                                    "Q1 2017", "Q2 2017", "Q3 2017", "Q4 2017",
+                                                    "Q1 2018", "Q2 2018", "Q3 2018", "Q4 2018",
+                                                    "Q1 2019", "Q2 2019", "Q3 2019", "Q4 2019",
+                                                    "Q1 2020", "Q2 2020"
+         ))
   ) %>% 
   separate(date_range, c("quarter", "year"), remove = FALSE) %>% 
   relocate(date_range, .before = animal_type)
@@ -84,7 +84,23 @@ townsville_clean <- townsville_complaints %>%
   group_by(date_received) %>% 
   separate(date_received, c("month", "year"), sep = " ", remove = FALSE) %>% 
   mutate(month = factor(month, levels = c("January", "February","March","April","May","June",
-                                          "July","August","September","October","November","December")))
+                                          "July","August","September","October","November","December")),
+         quarter = case_when(
+           month %in% c("January", "February", "March") ~ "Q1",
+           month %in% c("April", "May", "June") ~ "Q2",
+           month %in% c("July", "August", "September") ~ "Q3",
+           TRUE ~ "Q4"
+         )) %>% 
+  relocate(c("year", "month"), .before = quarter) %>% 
+  unite("date_range", c(quarter, year), sep = " ", remove = FALSE) %>% 
+  mutate(date_range = factor(date_range, levels = c("Q4 2013",
+                                                    "Q1 2014", "Q2 2014", "Q3 2014", "Q4 2014",
+                                                    "Q1 2015", "Q2 2015", "Q3 2015", "Q4 2015",
+                                                    "Q1 2016", "Q2 2016", "Q3 2016", "Q4 2016",
+                                                    "Q1 2017", "Q2 2017", "Q3 2017", "Q4 2017",
+                                                    "Q1 2018", "Q2 2018", "Q3 2018", "Q4 2018",
+                                                    "Q1 2019", "Q2 2019", "Q3 2019", "Q4 2019",
+                                                    "Q1 2020", "Q2 2020")))
 ```
 
 ```{r ggplot theme}
@@ -423,7 +439,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 
 # by year, don't use this
 
@@ -444,7 +460,7 @@ brisbane_clean %>%
   summarise(count = n()) %>% 
   ggplot(aes(x = date_range, y = count, colour = animal_type, group = animal_type)) +
   geom_line(linewidth = 1) +
-    labs(title = "Reasons for Complaint Calls, Brisbane Q4 2016 - Q2 2020",
+  labs(title = "Reasons for Complaint Calls, Brisbane Q4 2016 - Q2 2020",
        y = "No. of Calls",
        x = "Quarter, Year") +
   mytheme +
@@ -454,7 +470,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 ```
 
 ### Huge dog spike -- what factor is driving this?
@@ -484,7 +500,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 ```
 MASSIVE spike in Wandering and Unregistered complaint calls.
 
@@ -508,7 +524,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 
 brisbane_clean %>% 
   group_by(date_range, category, animal_type) %>%
@@ -527,7 +543,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 
 brisbane_clean %>% 
   group_by(date_range, category, animal_type) %>%
@@ -546,7 +562,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   ))
+  ))
 ```
 
 ### Suburb, type of animal, type of call
@@ -554,7 +570,7 @@ brisbane_clean %>%
 ```{r}
 brisbane_clean %>% 
   filter(((year == 2016 & quarter == "Q4") | year > 2016)) %>% 
- # filter(year > 2016 & year < 2020) %>%
+  # filter(year > 2016 & year < 2020) %>%
   group_by(date_range, suburb, animal_type) %>% 
   summarise(count = n()) %>% 
   slice_max(count, n = 1) %>% 
@@ -563,7 +579,7 @@ brisbane_clean %>%
   group_by(date_range) %>% 
   mutate(prop = scales::percent(round(count / sum(count), 2))) %>% 
   ggplot(aes(x = date_range, y = count, fill = animal_type)) +
-    geom_col(position = "fill") +
+  geom_col(position = "fill") +
   geom_text(aes(label = prop), position = position_fill(vjust = 0.5)) +
   mytheme +
   labs(title = "Proportion of Complaint by Call Type, Brisbane, Q4 2016 - Q2 2020",
@@ -576,7 +592,7 @@ brisbane_clean %>%
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
                                    hjust = 1
-                                   )) +
+  )) +
   scale_fill_brewer(palette = "Set1")
 ```
 
@@ -594,3 +610,82 @@ townsville_clean %>%
   arrange(year, -count)
 ```
 
+## Questions
+
+### Total call volume for complaint calls, trend over time
+
+```{r}
+townsville_clean %>% 
+  group_by(date_range) %>% 
+  summarise(count = n()) %>% 
+  ggplot() +
+  geom_line(aes(x = date_range, y = count, group = 1), linewidth = 1, colour = "chocolate1") +
+  labs(title = "Total Call Volume, Animal Complaints, Townsville Q4 2013 - Q2 2020",
+       y = "No. of Calls",
+       x = "Quarter, Year") +
+  mytheme +
+  scale_y_continuous(breaks = seq(1000, 3000, by = 250)) +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 1,
+                                   hjust = 1
+  ))
+```
+
+### Particular call most common?
+
+```{r}
+townsville_clean %>% 
+  group_by(date_range, animal_type) %>% 
+  summarise(count = n()) %>% 
+  ggplot() +
+  geom_line(aes(x = date_range, y = count), linewidth = 1, group = 1, colour = "chocolate1") +
+  labs(title = "Total Call Volume, Animal Complaints, Townsville Q4 2013 - Q2 2020",
+       y = "No. of Calls",
+       x = "Quarter, Year") +
+  mytheme +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 1,
+                                   hjust = 1)) +
+  facet_wrap(~animal_type, scales = "free", nrow = 2)
+
+townsville_clean %>% 
+  group_by(date_range, complaint_type, animal_type) %>%
+  filter(animal_type == "dog") %>%
+  summarise(count = n()) %>% 
+  filter(count > 5) %>% 
+  ggplot(aes(x = date_range, y = count, colour = complaint_type, group = complaint_type)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Reasons for Dog Complaint Calls, Townsville Q4 2013 - Q2 2020",
+       y = "No. of Calls",
+       x = "Quarter, Year") +
+  mytheme +
+  scale_y_continuous(breaks = seq(0, 800, by = 50)) +
+  guides(color = guide_legend(nrow = 3, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm")) +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 1,
+                                   hjust = 1
+  ))
+
+townsville_clean %>% 
+  group_by(date_range, complaint_type, animal_type) %>%
+  filter(animal_type == "cat") %>%
+  summarise(count = n()) %>% 
+  filter(count > 5) %>% 
+  ggplot(aes(x = date_range, y = count, colour = complaint_type, group = complaint_type)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Reasons for Cat Complaint Calls, Townsville Q4 2013 - Q2 2020",
+       y = "No. of Calls",
+       x = "Quarter, Year") +
+  mytheme +
+  scale_y_continuous(breaks = seq(0, 800, by = 50)) +
+  guides(color = guide_legend(nrow = 3, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm")) +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 1,
+                                   hjust = 1
+  ))
+```
+
+
+### Suburb, type of animal, type of call
