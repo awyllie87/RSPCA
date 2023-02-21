@@ -17,10 +17,10 @@ rspca_outcomes <- read_csv("data/animal_outcomes.csv")
 
 ```{r cleaning}
 states <- quote(c(act,nsw,nt,qld,sa,tas,vic,wa))
-outcomes <- quote(c(reclaimed, rehomed, other, euthanized, released, in_stock, transferred, currently_in_care))
-lrr_outcomes <- quote(c(reclaimed, rehomed, euthanized, released, in_stock, transferred))
+outcomes <- quote(c(reclaimed, rehomed, other, euthanized, released, transferred, currently_in_care))
+lrr_outcomes <- quote(c(reclaimed, rehomed, euthanized, released, transferred))
 
-rspca_fix <- rspca_outcomes %>% 
+rspca_fix_states <- rspca_outcomes %>% 
   filter(year < 2016)
 
 rspca_outcomes <- rspca_outcomes %>% 
@@ -29,33 +29,31 @@ rspca_outcomes <- rspca_outcomes %>%
          "NSW1" = "NT") %>% 
   rename("NT" = "NT1",
          "NSW" = "NSW1") %>% 
-  rbind(rspca_fix) %>% 
-  arrange(-year)
+  rbind(rspca_fix_states) %>% 
+  arrange(year)
 
-rm(rspca_fix)
+rm(rspca_fix_states)
 
-rspca_clean <- rspca_outcomes %>% 
+fix2006 <- rspca_outcomes %>% 
+  filter(year == 2006 & animal_type %in% c("Wildlife", "Other Animals")) %>% 
+  rename(NSW1 = ACT, NT1 = NSW, QLD1 = NT, SA1 = QLD, TAS1 = SA, VIC1 = TAS, WA1 = VIC, ACT = WA) %>% 
+  rename_all(~str_remove_all(., "1"))
+fix2006$ACT <- c(786, 28, 7, 1202, 625, 11, 265, 18, 0, 205, 10)
+fix2006 <- fix2006 %>% relocate(ACT, .before = NSW)
+
+the_rest <- rspca_outcomes %>% 
+  filter(year == 2006 & !animal_type %in% c("Wildlife", "Other Animals")) %>% 
+  rbind(fix2006)
+
+rspca_outcomes <- rspca_outcomes %>% 
+  filter(!year == 2006) %>% 
+  rbind(the_rest) %>% 
+  arrange(year)
+
+rm(fix2006, the_rest)
+
+rspca_states <- rspca_outcomes %>% 
   janitor::clean_names() %>% 
-  group_by(year, animal_type, outcome) %>% 
-  mutate(total = sum(!!states, na.rm = TRUE)) %>% 
-  ungroup()
-
-# The LRR is the percentage of animals who were rehomed, reclaimed by their owner or transferred to a
-# rescue group or other non-RSPCA facility as a percentage of the total number of animals received (not
-# including those currently in care or categorised as ‘other’)
-
-rspca_summary <- rspca_clean %>% 
-  pivot_wider(names_from = outcome, 
-              values_from = total, 
-              id_cols = c(year, animal_type), 
-              names_glue = '{snakecase::to_snake_case(outcome)}') %>% 
-  group_by(year, animal_type) %>% 
-  mutate(total = sum(!!outcomes, na.rm = TRUE),
-         lrr_total = sum(!!lrr_outcomes, na.rm = TRUE)) %>% 
-  mutate(success = round((sum(reclaimed, rehomed, released, na.rm = TRUE) / total), 2),
-         lrr = round((sum(reclaimed, rehomed, released, transferred, na.rm = TRUE) / lrr_total), 2))
-
-rspca_states <- rspca_clean %>% 
   select(-total) %>% 
   pivot_longer(act:wa, 
                values_to = "count", 
@@ -63,10 +61,50 @@ rspca_states <- rspca_clean %>%
                names_transform = list(state = toupper)) %>% 
   pivot_wider(names_from = outcome, 
               values_from = count, 
-              names_glue = '{snakecase::to_snake_case(outcome)}') %>% 
+              names_glue = '{snakecase::to_snake_case(outcome)}')
+
+care_fix <- rspca_states %>% 
+  ungroup() %>% 
+  filter(is.na(currently_in_care)) %>% 
+  mutate(currently_in_care = in_stock) %>% 
+  select(-in_stock)
+
+rspca_states <- rspca_states %>% 
+  filter(is.na(in_stock) & year > 2005) %>% 
+  select(-in_stock) %>% 
+  rbind(care_fix) %>% 
+  arrange(year) %>% 
   group_by(year, animal_type, state) %>% 
   mutate(total = sum(!!outcomes, na.rm = TRUE),
          lrr_total = sum(!!lrr_outcomes, na.rm = TRUE)) %>% 
+  mutate(success = round((sum(reclaimed, rehomed, released, na.rm = TRUE) / total), 2),
+         lrr = round((sum(reclaimed, rehomed, released, transferred, na.rm = TRUE) / lrr_total), 2))
+
+rspca_clean <-  rspca_states %>% 
+  ungroup() %>% 
+  select(-c(total, lrr_total, lrr, success)) %>% 
+  pivot_longer(cols = (reclaimed:currently_in_care), 
+               names_to = "outcome", 
+               names_transform = list(outcome = snakecase::to_title_case)) %>% 
+  pivot_wider(names_from = state, values_from = value,
+              names_glue = '{snakecase::to_snake_case(state)}') %>% 
+  group_by(year, animal_type, outcome) %>% 
+  mutate(total = sum(!!states, na.rm = TRUE))
+
+rm(care_fix)
+
+# The LRR is the percentage of animals who were rehomed, reclaimed by their owner or transferred to a
+# rescue group or other non-RSPCA facility as a percentage of the total number of animals received (not
+# including those currently in care or categorised as ‘other’)
+
+rspca_summary <- rspca_clean %>%
+  pivot_wider(names_from = outcome,
+              values_from = total,
+              id_cols = c(year, animal_type),
+              names_glue = '{snakecase::to_snake_case(outcome)}') %>%
+  group_by(year, animal_type) %>%
+  mutate(total = sum(!!outcomes, na.rm = TRUE),
+         lrr_total = sum(!!lrr_outcomes, na.rm = TRUE)) %>%
   mutate(success = round((sum(reclaimed, rehomed, released, na.rm = TRUE) / total), 2),
          lrr = round((sum(reclaimed, rehomed, released, transferred, na.rm = TRUE) / lrr_total), 2))
 
@@ -79,7 +117,9 @@ rspca_totals <- rspca_clean %>%
             sa = sum(sa),
             tas = sum(tas),
             vic = sum(vic),
-            wa = sum(wa))
+            wa = sum(wa)) %>% 
+  group_by(year, animal_type) %>% 
+  mutate(total = sum(!!states))
 
 rspca_state_totals <- rspca_totals %>% 
   pivot_longer(cols = c(act:wa), names_transform = toupper, names_to = "state", values_to = "count")
@@ -165,7 +205,7 @@ rspca_states %>%
   geom_line(size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2002, 2022, 1)) +
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
   labs(title = "Percentage of Dogs Adopted or Reclaimed, 2002 - 2018",
        y = "% of Dogs",
        x = "Year") +
@@ -180,7 +220,7 @@ rspca_states %>%
   geom_line(size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2002, 2022, 1)) +
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
   labs(title = "Live Release Rate (LRR) of Dogs, 2002 - 2018",
        y = "% of Dogs",
        x = "Year") +
@@ -195,7 +235,7 @@ rspca_states %>%
   geom_line(size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2002, 2022, 1)) +
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
   labs(title = "Percentage of Cats Adopted or Reclaimed, 2002 - 2018",
        y = "% of Cats",
        x = "Year") +
@@ -210,7 +250,7 @@ rspca_states %>%
   geom_line(size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2002, 2022, 1)) +
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
   labs(title = "Live Release Rate (LRR) of Cats, 2002 - 2018",
        y = "% of Cats",
        x = "Year") +
@@ -220,13 +260,13 @@ rspca_states %>%
   scale_color_brewer(palette = "Dark2")
 
 rspca_clean %>% 
-  filter(year >= 2009,
+  filter(year >= 2002,
          outcome != "In Stock") %>% 
   ggplot(aes(x = year, y = total, fill = outcome)) +
   geom_bar(position = "fill", stat = "identity" ) +
   scale_y_continuous(labels = scales::percent) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Proportion of All Outcomes in RSPCA Shelters, 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Proportion of All Outcomes in RSPCA Shelters, 2002 - 2018",
        y = "% of Animals",
        x = "Year") +
   mytheme +
@@ -235,13 +275,13 @@ rspca_clean %>%
   scale_fill_brewer(palette = "Set1")
 
 rspca_clean %>% 
-  filter(animal_type == "Dogs", year >= 2009,
+  filter(animal_type == "Dogs", year >= 2002,
          outcome != "In Stock") %>% 
   ggplot(aes(x = year, y = total, fill = outcome)) +
   geom_bar(position = "fill", stat = "identity" ) +
   scale_y_continuous(labels = scales::percent) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Proportion of Dog Outcomes in RSPCA Shelters, 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Proportion of Dog Outcomes in RSPCA Shelters, 2002 - 2018",
        y = "% of Dogs",
        x = "Year") +
   mytheme +
@@ -250,13 +290,13 @@ rspca_clean %>%
   scale_fill_brewer(palette = "Set1")
 
 rspca_clean %>% 
-  filter(animal_type == "Cats", year >= 2009,
+  filter(animal_type == "Cats", year >= 2002,
          outcome != "In Stock") %>% 
   ggplot(aes(x = year, y = total, fill = outcome)) +
   geom_bar(position = "fill", stat = "identity" ) +
   scale_y_continuous(labels = scales::percent) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Proportion of Cat Outcomes in RSPCA Shelters, 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Proportion of Cat Outcomes in RSPCA Shelters, 2002 - 2018",
        y = "% of Cats",
        x = "Year") +
   mytheme +
@@ -265,13 +305,13 @@ rspca_clean %>%
   scale_fill_brewer(palette = "Set1")
 
 rspca_clean %>% 
-  filter(animal_type == "Wildlife", year >= 2009,
-         outcome != "In Stock") %>% 
+  filter(animal_type == "Wildlife", year >= 2002,
+         !outcome %in% c("In Stock", "Reclaimed", "Rehomed")) %>% 
   ggplot(aes(x = year, y = total, fill = outcome)) +
   geom_bar(position = "fill", stat = "identity" ) +
   scale_y_continuous(labels = scales::percent) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Proportion of Wildlife Outcomes in RSPCA Shelters, 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Proportion of Wildlife Outcomes in RSPCA Shelters, 2002 - 2018",
        y = "% of Wildlife",
        x = "Year") +
   mytheme +
@@ -290,17 +330,20 @@ rspca_clean %>%
   mytheme +
   guides(fill=guide_legend(nrow=1, override.aes = list(colour = "black",
                                                        size = 0.1))) +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1,
+                                   vjust = 1)) +
   scale_fill_brewer(palette = "Dark2")
 
 rspca_summary %>% 
-  filter(year >= 2009, animal_type == "Dogs") %>% 
+  filter(year >= 2002, animal_type == "Dogs") %>% 
   ggplot(aes(x = year)) +
   geom_line(aes(y = lrr, colour = "Live Release"), size = 1) +
   geom_line(aes(y = success, colour = "Adopted / Reclaimed"), size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.02)) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Dogs Adopted or Reclaimed and Live Release Rate (LRR), 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Dogs Adopted or Reclaimed and Live Release Rate (LRR), 2002 - 2018",
        y = "% of Dogs",
        x = "Year") +
   mytheme +
@@ -310,14 +353,14 @@ rspca_summary %>%
                       limits = c("Live Release", "Adopted / Reclaimed"))
 
 rspca_summary %>% 
-  filter(year >= 2009, animal_type == "Cats") %>% 
+  filter(year >= 2002, animal_type == "Cats") %>% 
   ggplot(aes(x = year)) +
   geom_line(aes(y = lrr, colour = "Live Release"), size = 1) +
   geom_line(aes(y = success, colour = "Adopted / Reclaimed"), size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Cats Adopted or Reclaimed and Live Release Rate (LRR), 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Cats Adopted or Reclaimed and Live Release Rate (LRR), 2002 - 2018",
        y = "% of Cats",
        x = "Year") +
   mytheme +
@@ -327,14 +370,14 @@ rspca_summary %>%
                       limits = c("Live Release", "Adopted / Reclaimed"))
 
 rspca_summary %>% 
-  filter(year >= 2009, animal_type == "Wildlife") %>% 
+  filter(year >= 2002, animal_type == "Wildlife") %>% 
   ggplot(aes(x = year)) +
   geom_line(aes(y = lrr, colour = "Live Release"), size = 1) +
   geom_line(aes(y = success, colour = "Released"), size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Wildlife Released and Live Release Rate (LRR), 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Wildlife Released and Live Release Rate (LRR), 2002 - 2018",
        y = "% of Cats",
        x = "Year") +
   mytheme +
@@ -344,13 +387,13 @@ rspca_summary %>%
                       limits = c("Live Release", "Released"))
 
 rspca_summary %>% 
-  filter(year >= 2009, animal_type %in% c("Dogs", "Cats")) %>% 
+  filter(year >= 2002, animal_type %in% c("Dogs", "Cats")) %>% 
   ggplot(aes(x = year)) +
   geom_line(aes(y = lrr, colour = animal_type), size = 1) +
   scale_y_continuous(labels = scales::percent,
                      breaks = seq(0, 1, 0.05)) +
-  scale_x_continuous(breaks = seq(2009, 2022, 1)) +
-  labs(title = "Dog and Cat Live Release Rates (LRR), 2009 - 2018",
+  scale_x_continuous(breaks = seq(2002, 2018, 1)) +
+  labs(title = "Dog and Cat Live Release Rates (LRR), 2002 - 2018",
        y = "% of Animals",
        x = "Year") +
   mytheme +
@@ -359,13 +402,30 @@ rspca_summary %>%
   scale_colour_manual(values = c("aquamarine3", "chocolate1"),
                       limits = c("Cats", "Dogs"))
 
+rspca_summary %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = lrr, colour = animal_type), size = 1) +
+  scale_y_continuous(labels = scales::percent,
+                     breaks = seq(0, 1, 0.05)) +
+  scale_x_continuous(breaks = seq(1999, 2022, 1)) +
+  labs(title = "National RSPCA Live Release Rates, 1999 - 2018",
+       y = "% of Animals",
+       x = "Year") +
+  mytheme +
+  guides(color = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm"),
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1,
+                                   vjust = 1)) +
+  scale_colour_brewer(palette = "Dark2")
+
 rspca_outcomes %>%
   filter(outcome == "Euthanized") %>% 
   ggplot(aes(x = year)) +
   geom_line(aes(y = Total, colour = animal_type), size = 1) +
   geom_vline(xintercept = 2007, linetype = "dotted") +
   scale_y_continuous(breaks = seq(0, 50000, 10000)) +
-  scale_x_continuous(breaks = seq(1999, 2022, 2)) +
+  scale_x_continuous(breaks = seq(1999, 2018, 2)) +
   labs(title = "Number of Animals Euthanised per Year at RSPCA Shelters, 1999 - 2018",
        y = "No. of Animals",
        x = "Year") +
@@ -382,7 +442,7 @@ rspca_summary %>%
   geom_line(aes(y = total), group = 1, size = 1, colour = "dodgerblue1") +
   geom_vline(xintercept = 2007, linetype = "dotted") +
   scale_y_continuous(breaks = seq(0, 100000, 5000)) +
-  scale_x_continuous(breaks = seq(1999, 2022, 2)) +
+  scale_x_continuous(breaks = seq(1999, 2018, 2)) +
   labs(title = "Number of Animals Euthanised per Year at RSPCA Shelters, 1999 - 2018",
        y = "No. of Animals",
        x = "Year") +
@@ -390,8 +450,7 @@ rspca_summary %>%
   guides(color = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5))) +
   theme(legend.key.width = unit(1, "cm")) +
   scale_fill_brewer(palette = "Set1")
-```
-```{r}
+
 rspca_states %>% 
   ggplot(aes(x = year, y = total, fill = state)) +
   geom_bar(position = "fill", stat = "identity" ) +
@@ -410,16 +469,54 @@ rspca_states %>%
   geom_bar(position = "fill", stat = "identity" ) +
   scale_y_continuous(labels = scales::percent) +
   scale_x_continuous(breaks = seq(1999, 2018, 1)) +
-  labs(title = "Proportion of Euthanized Animals in RSPCA Shelters by State, 1999 - 2018",
+  labs(title = "Proportion of Euthanised Animals in RSPCA Shelters by State, 1999 - 2018",
        y = "% of Animals",
        x = "Year") +
   mytheme +
   guides(fill=guide_legend(nrow=1, override.aes = list(colour = "black",
                                                        size = 0.1))) +
+    theme(legend.key.width = unit(1, "cm"),
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1,
+                                   vjust = 1)) +
   scale_fill_brewer(palette = "Dark2")
+
+rspca_states %>% 
+  filter(state == "QLD") %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = lrr, colour = animal_type), size = 1) +
+  scale_y_continuous(labels = scales::percent,
+                     breaks = seq(0, 1, 0.10)) +
+  scale_x_continuous(breaks = seq(1999, 2018, 1)) +
+  labs(title = "RSPCA Queensland Live Release Rates, 2002 - 2018",
+       y = "% of Animals",
+       x = "Year") +
+  mytheme +
+  guides(color = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm"),
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1,
+                                   vjust = 1)) +
+  scale_colour_brewer(palette = "Dark2")
+
+rspca_states %>%
+  filter(state == "QLD") %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = euthanized, colour = animal_type), size = 1) +
+  geom_vline(xintercept = 2007, linetype = "dotted") +
+  scale_y_continuous(breaks = seq(0, 20000, 2500)) +
+  scale_x_continuous(breaks = seq(1999, 2018, 2)) +
+  labs(title = "Number of Animals Euthanised per Year by RSPCA Queensland, 1999 - 2018",
+       y = "No. of Animals",
+       x = "Year") +
+  mytheme +
+  guides(color = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm")) +
+  scale_fill_brewer(palette = "Set1")
+
+rspca_states %>% 
+  filter(state == "QLD")
 ```
-
-
 # Brisbane
 
 MISSING Q3 2016. ENDS Q2 2020
@@ -516,6 +613,17 @@ brisbane_clean %>%
   geom_line() +
   facet_wrap(~ year, scales = "free")
 ```
+
+## Queensland
+
+```{r}
+rspca_states %>% 
+  filter(state == "QLD") %>% 
+  select(-state) %>% 
+  ggplot(aes(x = year, y = euthanized)) +
+  geom_line(aes(group = animal_type, colour = animal_type))
+```
+
 
 ## Questions
 
