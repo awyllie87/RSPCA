@@ -20,6 +20,20 @@ states <- quote(c(act,nsw,nt,qld,sa,tas,vic,wa))
 outcomes <- quote(c(reclaimed, rehomed, other, euthanized, released, in_stock, transferred, currently_in_care))
 lrr_outcomes <- quote(c(reclaimed, rehomed, euthanized, released, in_stock, transferred))
 
+rspca_fix <- rspca_outcomes %>% 
+  filter(year < 2016)
+
+rspca_outcomes <- rspca_outcomes %>% 
+  filter(year >= 2016) %>% 
+  rename("NT1" = "NSW",
+         "NSW1" = "NT") %>% 
+  rename("NT" = "NT1",
+         "NSW" = "NSW1") %>% 
+  rbind(rspca_fix) %>% 
+  arrange(-year)
+
+rm(rspca_fix)
+
 rspca_clean <- rspca_outcomes %>% 
   janitor::clean_names() %>% 
   group_by(year, animal_type, outcome) %>% 
@@ -278,19 +292,6 @@ rspca_clean %>%
                                                        size = 0.1))) +
   scale_fill_brewer(palette = "Dark2")
 
-rspca_clean %>% 
-  ggplot(aes(x = year, y = total, fill = st)) +
-  geom_bar(position = "fill", stat = "identity" ) +
-  scale_y_continuous(labels = scales::percent) +
-  scale_x_continuous(breaks = seq(1999, 2018, 1)) +
-  labs(title = "Proportion of Received Animals in RSPCA Shelters, 1999 - 2018",
-       y = "% of Animals",
-       x = "Year") +
-  mytheme +
-  guides(fill=guide_legend(nrow=1, override.aes = list(colour = "black",
-                                                       size = 0.1))) +
-  scale_fill_brewer(palette = "Dark2")
-
 rspca_summary %>% 
   filter(year >= 2009, animal_type == "Dogs") %>% 
   ggplot(aes(x = year)) +
@@ -416,11 +417,6 @@ rspca_states %>%
   guides(fill=guide_legend(nrow=1, override.aes = list(colour = "black",
                                                        size = 0.1))) +
   scale_fill_brewer(palette = "Dark2")
-
-rspca_states %>% 
-  group_by(year, state) %>% 
-  select(year, state, euthanized) %>% 
-  summarise(euthanized = sum(euthanized))
 ```
 
 
@@ -888,5 +884,24 @@ townsville_clean %>%
   )) +
   scale_fill_brewer(palette = "Set1")
 
+```
+
+```{r}
+rspca_test <- rspca_outcomes %>% 
+  filter(year < 2016)
+
+rspca_outcomes %>% 
+  filter(year >= 2016) %>% 
+  rename("NT1" = "NSW",
+         "NSW1" = "NT") %>% 
+  rename("NT" = "NT1",
+         "NSW" = "NSW1") %>% 
+  rbind(rspca_test) %>% 
+  arrange(-year)
+
+rspca_states %>% 
+  group_by(year, state) %>% 
+  select(year, state, euthanized) %>% 
+  summarise(euthanized = sum(euthanized))
 ```
 
