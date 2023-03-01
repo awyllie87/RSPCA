@@ -514,8 +514,20 @@ rspca_states %>%
   theme(legend.key.width = unit(1, "cm")) +
   scale_fill_brewer(palette = "Set1")
 
-rspca_states %>% 
-  filter(state == "QLD")
+rspca_states %>%
+  filter(state == "QLD") %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = total-euthanized, colour = animal_type), size = 1) +
+  geom_vline(xintercept = 2007, linetype = "dotted") +
+  scale_y_continuous(breaks = seq(0, 20000, 2500)) +
+  scale_x_continuous(breaks = seq(1999, 2018, 2)) +
+  labs(title = "Animals not Euthanised per Year by RSPCA Queensland, 1999 - 2018",
+       y = "No. of Animals",
+       x = "Year") +
+  mytheme +
+  guides(color = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5))) +
+  theme(legend.key.width = unit(1, "cm")) +
+  scale_fill_brewer(palette = "Set1")
 ```
 # Brisbane
 
@@ -864,15 +876,14 @@ townsville_clean %>%
   group_by(date_range, animal_type) %>% 
   summarise(count = n()) %>% 
   ggplot() +
-  geom_line(aes(x = date_range, y = count), linewidth = 1, group = 1, colour = "chocolate1") +
+  geom_line(aes(x = date_range, y = count, colour = animal_type, group = animal_type), linewidth = 1) +
   labs(title = "Total Call Volume, Animal Complaints, Townsville Q4 2013 - Q2 2020",
        y = "No. of Calls",
        x = "Quarter, Year") +
   mytheme +
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1,
-                                   hjust = 1)) +
-  facet_wrap(~animal_type, scales = "free", nrow = 2)
+                                   hjust = 1))
 
 townsville_clean %>% 
   group_by(date_range, complaint_type, animal_type) %>%
